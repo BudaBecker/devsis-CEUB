@@ -2,7 +2,7 @@
 
 A user-friendly desktop application for managing your culinary recipes, built with Python and Tkinter. This project was developed for the System Development (`Desenvolvimento de Sistemas`) class at CEUB.
 
-![Application Screenshot](app\img\readme_img.png)
+![Application Screenshot](app/img/readme_img.png)
 
 ---
 
