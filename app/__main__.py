@@ -3,11 +3,6 @@ from app.gui.create_gui import CulinaryGUI
 
 def main():
     try:
-        # Start GUI & DB
-        # db = Database()
-        # db.create_tables()
-        
-        # Start GUI
         gui = CulinaryGUI()
         gui.run()
 

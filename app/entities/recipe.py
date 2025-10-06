@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class Recipe:
-    """A dataclass to represent a culinary recipe."""
-    id: int
+    id: int | None
     name: str
     description: str
     cuisine: str

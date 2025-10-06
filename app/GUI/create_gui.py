@@ -1,12 +1,19 @@
+# Native imports
 import tkinter as tk
 from tkinter import ttk
 
+# Installed imports
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
+
+# Local imports
+from app.db.database import DatabaseManager
+from app.entities.recipe import Recipe
 
 
 class CulinaryGUI:
     def __init__(self):
+        self.db = DatabaseManager()
         self.app = tb.Window(themename="superhero")
         self.app.title("Culinary Recipes — CRUD App")
         self.app.iconbitmap('app/img/app_icon.ico')
@@ -36,6 +43,8 @@ class CulinaryGUI:
         self._create_main_content()
         self._create_status_bar()
         self._setup_event_handlers()
+
+        self.current_recipe = None
 
     def _create_header(self):
         header = tb.Frame(self.app, padding=(16, 12))
@@ -92,22 +101,22 @@ class CulinaryGUI:
         ingredients_frame = tb.Frame(form)
         ingredients_frame.grid(row=9, column=0, columnspan=2, sticky=EW)
         ingredients_frame.grid_columnconfigure(0, weight=1)
-        ingredients_txt = tk.Text(ingredients_frame, height=8, wrap="word")
-        ingredients_txt.grid(row=0, column=0, sticky=EW)
-        ingredients_scroll = ttk.Scrollbar(ingredients_frame, orient="vertical", command=ingredients_txt.yview)
+        self.ingredients_txt = tk.Text(ingredients_frame, height=8, wrap="word")  # Make sure this is self.ingredients_txt
+        self.ingredients_txt.grid(row=0, column=0, sticky=EW)
+        ingredients_scroll = ttk.Scrollbar(ingredients_frame, orient="vertical", command=self.ingredients_txt.yview)
         ingredients_scroll.grid(row=0, column=1, sticky=NS)
-        ingredients_txt.configure(yscrollcommand=ingredients_scroll.set)
+        self.ingredients_txt.configure(yscrollcommand=ingredients_scroll.set)
 
         # Row 12-15: Steps (Text + Scrollbar)
         tb.Label(form, text="Steps / Method").grid(row=12, column=0, columnspan=2, sticky=W, pady=(10, 2))
         steps_frame = tb.Frame(form)
         steps_frame.grid(row=13, column=0, columnspan=2, sticky=EW)
         steps_frame.grid_columnconfigure(0, weight=1)
-        steps_txt = tk.Text(steps_frame, height=10, wrap="word")
-        steps_txt.grid(row=0, column=0, sticky=EW)
-        steps_scroll = ttk.Scrollbar(steps_frame, orient="vertical", command=steps_txt.yview)
+        self.steps_txt = tk.Text(steps_frame, height=10, wrap="word")  # Make sure this is self.steps_txt
+        self.steps_txt.grid(row=0, column=0, sticky=EW)
+        steps_scroll = ttk.Scrollbar(steps_frame, orient="vertical", command=self.steps_txt.yview)
         steps_scroll.grid(row=0, column=1, sticky=NS)
-        steps_txt.configure(yscrollcommand=steps_scroll.set)
+        self.steps_txt.configure(yscrollcommand=steps_scroll.set)
 
         # Action Buttons
         actions = tb.Frame(form, padding=(0, 10, 0, 0))
@@ -160,10 +169,13 @@ class CulinaryGUI:
         # Bottom action row
         bottom_actions = tb.Frame(table_frame, padding=(0, 8, 0, 0))
         bottom_actions.grid(row=2, column=0, columnspan=2, sticky=EW)
-        export_btn = tb.Button(bottom_actions, text="Edit", bootstyle=SECONDARY)
-        duplicate_btn = tb.Button(bottom_actions, text="Delete", bootstyle=SECONDARY)
-        export_btn.pack(side=LEFT, padx=(0, 8))
-        duplicate_btn.pack(side=LEFT)
+        self.edit_btn = tb.Button(bottom_actions, text="Edit", bootstyle=SECONDARY, command=self._edit_recipe)
+        self.delete_btn = tb.Button(bottom_actions, text="Delete", bootstyle=DANGER, command=self._delete_recipe)
+        self.edit_btn.pack(side=LEFT, padx=(0, 8))
+        self.delete_btn.pack(side=LEFT)
+
+        # Load existing recipes
+        self._load_recipes()
 
     def _create_status_bar(self):
         status = tb.Frame(self.app, padding=(16, 6))
@@ -173,20 +185,98 @@ class CulinaryGUI:
 
     def _setup_event_handlers(self):
         self.create_btn.config(command=self._create_recipe)
+        self.tree.bind('<<TreeviewSelect>>', self._on_select)
+
+    def _clear_form(self):
+        self.name_entry.delete(0, tk.END)
+        self.cuisine_cb.set('')
+        self.prep_sp.delete(0, tk.END)
+        self.prep_sp.insert(0, '0')
+        self.description_txt.delete('1.0', tk.END)
+        self.ingredients_txt.delete('1.0', tk.END)
+        self.steps_txt.delete('1.0', tk.END)
+        self.current_recipe = None
+        self.create_btn.config(text="Create")
+
+    def _load_recipes(self):
+        self.tree.delete(*self.tree.get_children())
+        for recipe in self.db.get_all_recipes():
+            display_desc = (recipe.description[:200] + "...") if len(recipe.description) > 200 else recipe.description
+            tag = "evenrow" if recipe.id % 2 == 0 else "oddrow"
+            self.tree.insert("", "end", values=(recipe.id, recipe.name, display_desc, 
+                           recipe.cuisine, recipe.preparation_time), tags=(tag,))
 
     def _create_recipe(self):
         name = self.name_entry.get().strip()
         cuisine = self.cuisine_cb.get().strip()
-        prep = self.prep_sp.get().strip()
+        prep = int(self.prep_sp.get().strip() or 0)
         description = self.description_txt.get("1.0", "end").strip()
+        ingredients = self.ingredients_txt.get("1.0", "end").strip()
+        instructions = self.steps_txt.get("1.0", "end").strip()
+
         if not name:
             self.status_lbl.config(text="Name is required")
             return
-        next_id = len(self.tree.get_children()) + 1
-        display_desc = (description[:200] + "...") if len(description) > 200 else description
-        tag = "evenrow" if next_id % 2 == 0 else "oddrow"
-        self.tree.insert("", "end", values=(next_id, name, display_desc, cuisine, prep), tags=(tag,))
-        self.status_lbl.config(text=f"Added recipe #{next_id}: {name}")
+
+        recipe = Recipe(
+            id=getattr(self.current_recipe, 'id', None),
+            name=name,
+            description=description,
+            cuisine=cuisine,
+            ingredients=ingredients,
+            instructions=instructions,
+            preparation_time=prep
+        )
+
+        if self.current_recipe:
+            self.db.update_recipe(recipe)
+            self.status_lbl.config(text=f"Updated recipe: {name}")
+        else:
+            recipe_id = self.db.insert_recipe(recipe)
+            self.status_lbl.config(text=f"Added recipe #{recipe_id}: {name}")
+
+        self._clear_form()
+        self._load_recipes()
+
+    def _edit_recipe(self):
+        selected = self.tree.selection()
+        if not selected:
+            self.status_lbl.config(text="Please select a recipe to edit")
+            return
+
+        recipe_id = self.tree.item(selected[0])['values'][0]
+        recipe = self.db.get_recipe(recipe_id)
+        if recipe:
+            self.current_recipe = recipe
+            self.name_entry.insert(0, recipe.name)
+            self.cuisine_cb.set(recipe.cuisine)
+            self.prep_sp.delete(0, tk.END)
+            self.prep_sp.insert(0, str(recipe.preparation_time))
+            self.description_txt.insert('1.0', recipe.description)
+            self.ingredients_txt.insert('1.0', recipe.ingredients)
+            self.steps_txt.insert('1.0', recipe.instructions)
+            self.create_btn.config(text="Update")
+            self.status_lbl.config(text=f"Editing recipe: {recipe.name}")
+
+    def _delete_recipe(self):
+        selected = self.tree.selection()
+        if not selected:
+            self.status_lbl.config(text="Please select a recipe to delete")
+            return
+
+        recipe_id = self.tree.item(selected[0])['values'][0]
+        if self.db.delete_recipe(recipe_id):
+            self._load_recipes()
+            self._clear_form()
+            self.status_lbl.config(text=f"Recipe #{recipe_id} deleted")
+
+    def _on_select(self, event):
+        selected = self.tree.selection()
+        if selected:
+            recipe_id = self.tree.item(selected[0])['values'][0]
+            recipe = self.db.get_recipe(recipe_id)
+            if recipe:
+                self.status_lbl.config(text=f"Selected recipe: {recipe.name}")
 
     def run(self) -> None:
         self.app.mainloop()
