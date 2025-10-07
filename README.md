@@ -20,6 +20,7 @@ This application provides a simple and intuitive graphical interface for users t
 
 ### Future Features
 
+- [ ] Improve GUI appearance and usage - make a decent UX/UI :(
 - [ ] Advanced search and filtering (by ingredient, cuisine type, etc.).
 - [ ] AI-powered assistant to create and suggest new recipes.
 - [ ] Functionality to import/export recipes.
@@ -62,7 +63,7 @@ Make sure you have the following installed on your system:
     - On **Windows**:
       ```sh
       python -m venv .venv
-      .venv\Scripts\activate
+      .venv/Scripts/activate
       ```
     - On **macOS / Linux**:
       ```sh
