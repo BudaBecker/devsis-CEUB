@@ -1,4 +1,4 @@
-from app.gui.create_gui import CulinaryGUI
+from app.gui.culinary_gui import CulinaryGUI
 
 
 def main():

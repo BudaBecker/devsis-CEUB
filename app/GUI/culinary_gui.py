@@ -19,6 +19,8 @@ class CulinaryGUI:
         self.app.iconbitmap('app/img/app_icon.ico')
         self.app.geometry("1200x720")
         self.app.minsize(1000, 600)
+        
+        self.widgets = []
 
         self.style = tb.Style()
 
@@ -280,6 +282,10 @@ class CulinaryGUI:
 
     def run(self) -> None:
         self.app.mainloop()
+        
+    def __del__(self):
+        # Unpack all labels
+        pass
 
 
 # Usage example:
