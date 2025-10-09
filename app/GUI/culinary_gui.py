@@ -7,20 +7,31 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
 # Local imports
-from app.db.database import DatabaseManager
 from app.entities.recipe import Recipe
+from app.db.database import DatabaseManager
+from app.gui.recipes_list import RecipeList
+from app.gui.form import Form
 
 
-class CulinaryGUI:
+class CulinaryGUI(ttk.Window):
     def __init__(self):
+        super().__init__(themename="superhero")
         self.db = DatabaseManager()
-        self.app = tb.Window(themename="superhero")
-        self.app.title("Culinary Recipes — CRUD App")
-        self.app.iconbitmap('app/img/app_icon.ico')
-        self.app.geometry("1200x720")
-        self.app.minsize(1000, 600)
+        self.title("Culinary Recipes — CRUD App")
+        self.iconbitmap('app/img/app_icon.ico')
+        self.geometry("1200x720")
+        self.minsize(1000, 600)
         
-        self.widgets = []
+        main = ttk.Frame(self)
+        main.pack(fill="both", expand=True)
+        
+        self.frames = {}
+        
+        for F in (RecipeList, Form):
+            page_name = F.__name__
+            frame = F(parent=main, controller=self)
+            self.frames[page_name] = frame
+            frame.grid(row=0, column=0, sticky="nsew")
 
         self.style = tb.Style()
 
@@ -64,120 +75,8 @@ class CulinaryGUI:
         main.grid_columnconfigure(1, weight=1)  # table column expands
         main.grid_rowconfigure(0, weight=1)
 
-        # Right: Form
-        form = tb.Labelframe(main, text="Recipe Details", padding=12)
-        form.grid(row=0, column=1, sticky=NS, padx=(0, 12))
-        for i in range(0, 20):
-            form.grid_rowconfigure(i, pad=2)
-        # Row 0: Name
-        tb.Label(form, text="Name").grid(row=0, column=0, sticky=W, pady=(0, 2))
-        self.name_entry = tb.Entry(form, width=34)
-        self.name_entry.grid(row=1, column=0, columnspan=2, sticky=EW)
+        
 
-        # Row 2: Prep time and Cuisine
-        tb.Label(form, text="Cuisine").grid(row=2, column=1, sticky=W, pady=(8, 2))
-        self.cuisine_cb = ttk.Combobox(
-            form,
-            values=["American", "Brazilian", "Italian", "Mexican", "Indian", "Japanese", "Other"],
-            state="readonly",
-            width=16,
-        )
-        self.cuisine_cb.grid(row=3, column=1, sticky=EW)
-        tb.Label(form, text="Prep Time (min)").grid(row=2, column=0, sticky=W, pady=(8, 2))
-        self.prep_sp = ttk.Spinbox(form, from_=0, to=1000, width=10)
-        self.prep_sp.grid(row=3, column=0, sticky=EW)
-
-        # Row 3: Description
-        tb.Label(form, text="Description").grid(row=4, column=0, sticky=W, pady=(8, 2))
-        description_frame = tb.Frame(form)
-        description_frame.grid(row=5, column=0, columnspan=2, sticky=EW)
-        description_frame.grid_columnconfigure(0, weight=1)
-        self.description_txt = tk.Text(description_frame, height=6, wrap="word")
-        self.description_txt.grid(row=0, column=0, sticky=EW)
-        description_scroll = ttk.Scrollbar(description_frame, orient="vertical", command=self.description_txt.yview)
-        description_scroll.grid(row=0, column=1, sticky=NS)
-        self.description_txt.configure(yscrollcommand=description_scroll.set)
-
-        # Row 8-11: Ingredients (Text + Scrollbar)
-        tb.Label(form, text="Ingredients").grid(row=8, column=0, columnspan=2, sticky=W, pady=(10, 2))
-        ingredients_frame = tb.Frame(form)
-        ingredients_frame.grid(row=9, column=0, columnspan=2, sticky=EW)
-        ingredients_frame.grid_columnconfigure(0, weight=1)
-        self.ingredients_txt = tk.Text(ingredients_frame, height=8, wrap="word")  # Make sure this is self.ingredients_txt
-        self.ingredients_txt.grid(row=0, column=0, sticky=EW)
-        ingredients_scroll = ttk.Scrollbar(ingredients_frame, orient="vertical", command=self.ingredients_txt.yview)
-        ingredients_scroll.grid(row=0, column=1, sticky=NS)
-        self.ingredients_txt.configure(yscrollcommand=ingredients_scroll.set)
-
-        # Row 12-15: Steps (Text + Scrollbar)
-        tb.Label(form, text="Steps / Method").grid(row=12, column=0, columnspan=2, sticky=W, pady=(10, 2))
-        steps_frame = tb.Frame(form)
-        steps_frame.grid(row=13, column=0, columnspan=2, sticky=EW)
-        steps_frame.grid_columnconfigure(0, weight=1)
-        self.steps_txt = tk.Text(steps_frame, height=10, wrap="word")  # Make sure this is self.steps_txt
-        self.steps_txt.grid(row=0, column=0, sticky=EW)
-        steps_scroll = ttk.Scrollbar(steps_frame, orient="vertical", command=self.steps_txt.yview)
-        steps_scroll.grid(row=0, column=1, sticky=NS)
-        self.steps_txt.configure(yscrollcommand=steps_scroll.set)
-
-        # Action Buttons
-        actions = tb.Frame(form, padding=(0, 10, 0, 0))
-        actions.grid(row=16, column=0, columnspan=2, sticky=EW)
-        actions.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
-        self.create_btn = tb.Button(actions, text="Create", bootstyle=SUCCESS)
-        self.create_btn.grid(row=0, column=0, padx=4, sticky=EW)
-
-        # Left: Table (Treeview) --------------------------------------------------
-        table_frame = tb.Labelframe(main, text="Recipes", padding=12)
-        table_frame.grid(row=0, column=0, sticky=NSEW)
-        table_frame.grid_rowconfigure(0, weight=1)
-        table_frame.grid_columnconfigure(0, weight=1)
-        columns = ("id", "name", "description", "cuisine", "prep")
-        self.tree = ttk.Treeview(
-            table_frame,
-            columns=columns,
-            show="headings",
-            height=18,
-        )
-        self.tree.grid(row=0, column=0, sticky=NSEW)
-
-        # Headings
-        self.tree.heading("id", text="ID")
-        self.tree.heading("name", text="Name")
-        self.tree.heading("description", text="Description")
-        self.tree.heading("cuisine", text="Cuisine")
-        self.tree.heading("prep", text="Prep (min)")
-
-        # Column widths (fixed)
-        self.tree.column("id", width=40, anchor=W, stretch=False)
-        self.tree.column("name", width=160, anchor=W, stretch=False)
-        self.tree.column("description", width=420, anchor=W, stretch=False)
-        self.tree.column("cuisine", width=120, anchor=W, stretch=False)
-        self.tree.column("prep", width=80, anchor=W, stretch=False)
-
-        # Style the Treeview for table look
-        self.style.configure("Treeview", rowheight=28, font=("Segoe UI", 10))
-        self.style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"))
-        self.tree.tag_configure("oddrow", background=self.style.colors.bg, foreground=self.style.colors.fg)
-        self.tree.tag_configure("evenrow", background="#f3f6f9")  # subtle stripe
-
-        # Scrollbars
-        y_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
-        x_scroll = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
-        y_scroll.grid(row=0, column=1, sticky=NS)
-        x_scroll.grid(row=1, column=0, sticky=EW)
-
-        # Bottom action row
-        bottom_actions = tb.Frame(table_frame, padding=(0, 8, 0, 0))
-        bottom_actions.grid(row=2, column=0, columnspan=2, sticky=EW)
-        self.edit_btn = tb.Button(bottom_actions, text="Edit", bootstyle=SECONDARY, command=self._edit_recipe)
-        self.delete_btn = tb.Button(bottom_actions, text="Delete", bootstyle=DANGER, command=self._delete_recipe)
-        self.edit_btn.pack(side=LEFT, padx=(0, 8))
-        self.delete_btn.pack(side=LEFT)
-
-        # Load existing recipes
-        self._load_recipes()
 
     def _create_status_bar(self):
         status = tb.Frame(self.app, padding=(16, 6))
