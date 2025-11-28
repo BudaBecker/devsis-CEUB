@@ -3,22 +3,20 @@ import tkinter as tk
 from tkinter import ttk
 
 # Installed imports
+import requests
 import ttkbootstrap as tb
-from ttkbootstrap.constants import *
-
-# Local imports
-from app.db.database import DatabaseManager
-from app.entities.recipe import Recipe
+from ttkbootstrap.constants import DANGER, EW, LEFT, NSEW, NS, SECONDARY, SUCCESS, W
 
 
 class CulinaryGUI:
     def __init__(self):
-        self.db = DatabaseManager()
         self.app = tb.Window(themename="superhero")
         self.app.title("Culinary Recipes — CRUD App")
         self.app.iconbitmap('app/img/app_icon.ico')
         self.app.geometry("1200x720")
         self.app.minsize(1000, 600)
+        self.api_base = "http://127.0.0.1:8000/api" #Change to a server address for multiple devices 
+
 
         self.style = tb.Style()
 
@@ -199,12 +197,32 @@ class CulinaryGUI:
         self.create_btn.config(text="Create")
 
     def _load_recipes(self):
+        try:
+            response = requests.get(f"{self.api_base}/recipes", timeout=5)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            self.status_lbl.config(text=f"Failed to load recipes: {exc}")
+            return
+
+        recipes = response.json()
         self.tree.delete(*self.tree.get_children())
-        for recipe in self.db.get_all_recipes():
-            display_desc = (recipe.description[:200] + "...") if len(recipe.description) > 200 else recipe.description
-            tag = "evenrow" if recipe.id % 2 == 0 else "oddrow"
-            self.tree.insert("", "end", values=(recipe.id, recipe.name, display_desc, 
-                           recipe.cuisine, recipe.preparation_time), tags=(tag,))
+        for recipe in recipes:
+            description = recipe.get("description", "") or ""
+            display_desc = (description[:200] + "...") if len(description) > 200 else description
+            recipe_id = recipe.get("id", 0) or 0
+            tag = "evenrow" if recipe_id % 2 == 0 else "oddrow"
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    recipe_id,
+                    recipe.get("name", ""),
+                    display_desc,
+                    recipe.get("cuisine", ""),
+                    recipe.get("preparation_time", 0),
+                ),
+                tags=(tag,),
+            )
 
     def _create_recipe(self):
         name = self.name_entry.get().strip()
@@ -218,22 +236,38 @@ class CulinaryGUI:
             self.status_lbl.config(text="Name is required")
             return
 
-        recipe = Recipe(
-            id=getattr(self.current_recipe, 'id', None),
-            name=name,
-            description=description,
-            cuisine=cuisine,
-            ingredients=ingredients,
-            instructions=instructions,
-            preparation_time=prep
-        )
+        payload = {
+            "name": name,
+            "description": description,
+            "cuisine": cuisine,
+            "ingredients": ingredients,
+            "instructions": instructions,
+            "preparation_time": prep,
+        }
 
-        if self.current_recipe:
-            self.db.update_recipe(recipe)
-            self.status_lbl.config(text=f"Updated recipe: {name}")
-        else:
-            recipe_id = self.db.insert_recipe(recipe)
-            self.status_lbl.config(text=f"Added recipe #{recipe_id}: {name}")
+        try:
+            if self.current_recipe:
+                recipe_id = self.current_recipe.get("id")
+                response = requests.put(
+                    f"{self.api_base}/edit-recipe/{recipe_id}",
+                    json=payload,
+                    timeout=5,
+                )
+                response.raise_for_status()
+                self.status_lbl.config(text=f"Updated recipe: {name}")
+            else:
+                response = requests.post(
+                    f"{self.api_base}/create-recipe",
+                    json=payload,
+                    timeout=5,
+                )
+                response.raise_for_status()
+                data = response.json()
+                recipe_id = data.get("id")
+                self.status_lbl.config(text=f"Added recipe #{recipe_id}: {name}")
+        except requests.RequestException as exc:
+            self.status_lbl.config(text=f"Request failed: {exc}")
+            return
 
         self._clear_form()
         self._load_recipes()
@@ -245,18 +279,28 @@ class CulinaryGUI:
             return
 
         recipe_id = self.tree.item(selected[0])['values'][0]
-        recipe = self.db.get_recipe(recipe_id)
-        if recipe:
-            self.current_recipe = recipe
-            self.name_entry.insert(0, recipe.name)
-            self.cuisine_cb.set(recipe.cuisine)
-            self.prep_sp.delete(0, tk.END)
-            self.prep_sp.insert(0, str(recipe.preparation_time))
-            self.description_txt.insert('1.0', recipe.description)
-            self.ingredients_txt.insert('1.0', recipe.ingredients)
-            self.steps_txt.insert('1.0', recipe.instructions)
-            self.create_btn.config(text="Update")
-            self.status_lbl.config(text=f"Editing recipe: {recipe.name}")
+        try:
+            response = requests.get(f"{self.api_base}/recipes/{recipe_id}", timeout=5)
+            response.raise_for_status()
+            recipe = response.json()
+        except requests.RequestException as exc:
+            self.status_lbl.config(text=f"Failed to load recipe: {exc}")
+            return
+
+        self.current_recipe = recipe
+        self.name_entry.delete(0, tk.END)
+        self.name_entry.insert(0, recipe.get("name", ""))
+        self.cuisine_cb.set(recipe.get("cuisine", ""))
+        self.prep_sp.delete(0, tk.END)
+        self.prep_sp.insert(0, str(recipe.get("preparation_time", 0)))
+        self.description_txt.delete('1.0', tk.END)
+        self.description_txt.insert('1.0', recipe.get("description", ""))
+        self.ingredients_txt.delete('1.0', tk.END)
+        self.ingredients_txt.insert('1.0', recipe.get("ingredients", ""))
+        self.steps_txt.delete('1.0', tk.END)
+        self.steps_txt.insert('1.0', recipe.get("instructions", ""))
+        self.create_btn.config(text="Update")
+        self.status_lbl.config(text=f"Editing recipe: {recipe.get('name', '')}")
 
     def _delete_recipe(self):
         selected = self.tree.selection()
@@ -265,18 +309,23 @@ class CulinaryGUI:
             return
 
         recipe_id = self.tree.item(selected[0])['values'][0]
-        if self.db.delete_recipe(recipe_id):
-            self._load_recipes()
-            self._clear_form()
-            self.status_lbl.config(text=f"Recipe #{recipe_id} deleted")
+        try:
+            response = requests.delete(f"{self.api_base}/delete-recipe/{recipe_id}", timeout=5)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            self.status_lbl.config(text=f"Failed to delete recipe: {exc}")
+            return
+
+        self._load_recipes()
+        self._clear_form()
+        self.status_lbl.config(text=f"Recipe #{recipe_id} deleted")
 
     def _on_select(self, event):
         selected = self.tree.selection()
         if selected:
-            recipe_id = self.tree.item(selected[0])['values'][0]
-            recipe = self.db.get_recipe(recipe_id)
-            if recipe:
-                self.status_lbl.config(text=f"Selected recipe: {recipe.name}")
+            values = self.tree.item(selected[0])['values']
+            if values:
+                self.status_lbl.config(text=f"Selected recipe: {values[1]}")
 
     def run(self) -> None:
         self.app.mainloop()
