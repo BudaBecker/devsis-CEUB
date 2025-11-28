@@ -3,9 +3,19 @@ import tkinter as tk
 from tkinter import ttk
 
 # Installed imports
-import requests
+from requests import RequestException
 import ttkbootstrap as tb
 from ttkbootstrap.constants import DANGER, EW, LEFT, NSEW, NS, SECONDARY, SUCCESS, W
+
+# Local imports
+from app.GUI.gui_services import (
+    API_BASE,
+    create_recipe as api_create_recipe,
+    delete_recipe as api_delete_recipe,
+    get_recipe as api_get_recipe,
+    list_recipes as api_list_recipes,
+    update_recipe as api_update_recipe,
+)
 
 
 class CulinaryGUI:
@@ -15,7 +25,7 @@ class CulinaryGUI:
         self.app.iconbitmap('app/img/app_icon.ico')
         self.app.geometry("1200x720")
         self.app.minsize(1000, 600)
-        self.api_base = "http://127.0.0.1:8000/api" #Change to a server address for multiple devices 
+        self.api_base = API_BASE  # Change to a server address for multiple devices
 
 
         self.style = tb.Style()
@@ -198,13 +208,11 @@ class CulinaryGUI:
 
     def _load_recipes(self):
         try:
-            response = requests.get(f"{self.api_base}/recipes", timeout=5)
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            recipes = api_list_recipes(self.api_base)
+        except RequestException as exc:
             self.status_lbl.config(text=f"Failed to load recipes: {exc}")
             return
 
-        recipes = response.json()
         self.tree.delete(*self.tree.get_children())
         for recipe in recipes:
             description = recipe.get("description", "") or ""
@@ -248,24 +256,13 @@ class CulinaryGUI:
         try:
             if self.current_recipe:
                 recipe_id = self.current_recipe.get("id")
-                response = requests.put(
-                    f"{self.api_base}/edit-recipe/{recipe_id}",
-                    json=payload,
-                    timeout=5,
-                )
-                response.raise_for_status()
+                api_update_recipe(recipe_id, payload, self.api_base)
                 self.status_lbl.config(text=f"Updated recipe: {name}")
             else:
-                response = requests.post(
-                    f"{self.api_base}/create-recipe",
-                    json=payload,
-                    timeout=5,
-                )
-                response.raise_for_status()
-                data = response.json()
+                data = api_create_recipe(payload, self.api_base)
                 recipe_id = data.get("id")
                 self.status_lbl.config(text=f"Added recipe #{recipe_id}: {name}")
-        except requests.RequestException as exc:
+        except RequestException as exc:
             self.status_lbl.config(text=f"Request failed: {exc}")
             return
 
@@ -280,10 +277,8 @@ class CulinaryGUI:
 
         recipe_id = self.tree.item(selected[0])['values'][0]
         try:
-            response = requests.get(f"{self.api_base}/recipes/{recipe_id}", timeout=5)
-            response.raise_for_status()
-            recipe = response.json()
-        except requests.RequestException as exc:
+            recipe = api_get_recipe(recipe_id, self.api_base)
+        except RequestException as exc:
             self.status_lbl.config(text=f"Failed to load recipe: {exc}")
             return
 
@@ -310,9 +305,8 @@ class CulinaryGUI:
 
         recipe_id = self.tree.item(selected[0])['values'][0]
         try:
-            response = requests.delete(f"{self.api_base}/delete-recipe/{recipe_id}", timeout=5)
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            api_delete_recipe(recipe_id, self.api_base)
+        except RequestException as exc:
             self.status_lbl.config(text=f"Failed to delete recipe: {exc}")
             return
 
