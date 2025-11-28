@@ -1,6 +1,6 @@
 # Culinary Recipes CRUD
 
-A user-friendly desktop application for managing your culinary recipes, built with Python and Tkinter. This project was developed for the System Development (`Desenvolvimento de Sistemas`) class at CEUB.
+A user-friendly desktop application for managing your culinary recipes, built with Python. This project was developed for the System Development (`Desenvolvimento de Sistemas`) class at CEUB.
 
 ![Application Screenshot](app/img/readme_img.png)
 
@@ -8,7 +8,7 @@ A user-friendly desktop application for managing your culinary recipes, built wi
 
 ## About The Project
 
-This application provides a simple and intuitive graphical interface for users to perform CRUD (Create, Read, Update, Delete) operations on a collection of culinary recipes. It serves as a practical demonstration of database integration with a desktop GUI.
+This application provides a simple and intuitive graphical interface backed by a FastAPI server, allowing users to perform CRUD (Create, Read, Update, Delete) operations on a collection of culinary recipes. It serves as a practical demonstration of database integration with a desktop GUI and a lightweight HTTP API.
 
 ### Features
 
@@ -24,6 +24,7 @@ This application provides a simple and intuitive graphical interface for users t
 - [ ] Advanced search and filtering (by ingredient, cuisine type, etc.).
 - [ ] AI-powered assistant to create and suggest new recipes.
 - [ ] Functionality to import/export recipes.
+- [ ] Multi-device access through a locally hosted server.
 
 ---
 
@@ -35,6 +36,7 @@ This project was built using the following technologies:
 - **Tkinter:** The standard Python library for creating graphical user interfaces.
 - **Ttkbootstrap:** A theme extension for Tkinter that provides modern, professional-looking widgets.
 - **SQLite:** A lightweight, serverless, self-contained SQL database engine used for local data storage.
+- **FastAPI:** A high-performance HTTP framework powering the server-side CRUD API.
 
 ---
 
