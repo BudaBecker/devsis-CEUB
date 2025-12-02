@@ -18,7 +18,7 @@ class RecipePayload(BaseModel):
 	preparation_time: int = 0
 
 
-def serialize_recipe(recipe: Recipe) -> dict[str, int | str | None]:
+def serialize_recipe(recipe: Recipe):
 	return {
 		"id": recipe.id,
 		"name": recipe.name,
@@ -31,12 +31,12 @@ def serialize_recipe(recipe: Recipe) -> dict[str, int | str | None]:
 
 
 @router.get("/recipes")
-async def list_recipes() -> list[dict[str, int | str | None]]:
+async def list_recipes():
 	return [serialize_recipe(recipe) for recipe in db.get_all_recipes()]
 
 
 @router.get("/recipes/{recipe_id}")
-async def get_recipe(recipe_id: int) -> dict[str, int | str | None]:
+async def get_recipe(recipe_id: int):
 	recipe = db.get_recipe(recipe_id)
 	if not recipe:
 		raise HTTPException(status_code=404, detail="recipe not found")
@@ -44,7 +44,7 @@ async def get_recipe(recipe_id: int) -> dict[str, int | str | None]:
 
 
 @router.post("/create-recipe")
-async def create_recipe(payload: RecipePayload) -> dict[str, int | str]:
+async def create_recipe(payload: RecipePayload):
 	recipe = Recipe(
 		id=None,
 		name=payload.name,
@@ -59,7 +59,7 @@ async def create_recipe(payload: RecipePayload) -> dict[str, int | str]:
 
 
 @router.put("/edit-recipe/{recipe_id}")
-async def edit_recipe(recipe_id: int, payload: RecipePayload) -> dict[str, str]:
+async def edit_recipe(recipe_id: int, payload: RecipePayload):
 	recipe = Recipe(
 		id=recipe_id,
 		name=payload.name,
@@ -75,7 +75,7 @@ async def edit_recipe(recipe_id: int, payload: RecipePayload) -> dict[str, str]:
 
 
 @router.delete("/delete-recipe/{recipe_id}")
-async def delete_recipe(recipe_id: int) -> dict[str, str]:
+async def delete_recipe(recipe_id: int):
 	if not db.delete_recipe(recipe_id):
 		raise HTTPException(status_code=404, detail="recipe not found")
 	return {"message": "recipe deleted"}
