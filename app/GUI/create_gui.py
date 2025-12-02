@@ -47,9 +47,9 @@ class CulinaryGUI:
         self.app.grid_rowconfigure(2, weight=1)
         self.app.grid_rowconfigure(3, weight=0)
         
+        self._create_status_bar()
         self._create_header()
         self._create_main_content()
-        self._create_status_bar()
         self._setup_event_handlers()
 
         self.current_recipe = None
