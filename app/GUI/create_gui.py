@@ -16,6 +16,8 @@ from app.GUI.gui_services import (
     list_recipes as api_list_recipes,
     update_recipe as api_update_recipe,
 )
+from app.db.database import DatabaseManager  # added for fallback
+from app.entities.recipe import Recipe  # <-- added: allow DB fallbacks
 
 
 class CulinaryGUI:
@@ -25,7 +27,10 @@ class CulinaryGUI:
         self.app.iconbitmap('app/img/app_icon.ico')
         self.app.geometry("1200x720")
         self.app.minsize(1000, 600)
-        self.api_base = API_BASE  # Change to a server address for multiple devices
+        # Ensure API_BASE is usable; fallback to localhost if not set
+        self.api_base = API_BASE or "http://127.0.0.1:8000/api"
+        # Local DB fallback when API is not reachable
+        self.db = DatabaseManager()
 
 
         self.style = tb.Style()
@@ -210,7 +215,9 @@ class CulinaryGUI:
         try:
             recipes = api_list_recipes(self.api_base)
         except RequestException as exc:
-            self.status_lbl.config(text=f"Failed to load recipes: {exc}")
+            # API failed — fall back to local DB and show concise status
+            self.status_lbl.config(text=f"API unreachable, using local DB: {exc}")
+            self._load_recipes_from_db()
             return
 
         self.tree.delete(*self.tree.get_children())
@@ -229,6 +236,19 @@ class CulinaryGUI:
                     recipe.get("cuisine", ""),
                     recipe.get("preparation_time", 0),
                 ),
+                tags=(tag,),
+            )
+
+    def _load_recipes_from_db(self):
+        # Load recipes directly from local sqlite DB (DatabaseManager) as fallback
+        self.tree.delete(*self.tree.get_children())
+        for recipe in self.db.get_all_recipes():
+            display_desc = (recipe.description[:200] + "...") if len(recipe.description) > 200 else recipe.description
+            tag = "evenrow" if (recipe.id or 0) % 2 == 0 else "oddrow"
+            self.tree.insert(
+                "",
+                "end",
+                values=(recipe.id, recipe.name, display_desc, recipe.cuisine, recipe.preparation_time),
                 tags=(tag,),
             )
 
@@ -263,8 +283,40 @@ class CulinaryGUI:
                 recipe_id = data.get("id")
                 self.status_lbl.config(text=f"Added recipe #{recipe_id}: {name}")
         except RequestException as exc:
-            self.status_lbl.config(text=f"Request failed: {exc}")
-            return
+            # API failed — attempt local DB fallback
+            try:
+                if self.current_recipe:
+                    # Update local DB
+                    recipe_obj = Recipe(
+                        id=self.current_recipe.get("id"),
+                        name=payload["name"],
+                        description=payload["description"],
+                        cuisine=payload["cuisine"],
+                        ingredients=payload["ingredients"],
+                        instructions=payload["instructions"],
+                        preparation_time=payload["preparation_time"],
+                    )
+                    updated = self.db.update_recipe(recipe_obj)
+                    if updated:
+                        self.status_lbl.config(text=f"(Local) Updated recipe: {name}")
+                    else:
+                        self.status_lbl.config(text="(Local) Update failed: recipe not found")
+                else:
+                    # Insert into local DB
+                    recipe_obj = Recipe(
+                        id=None,
+                        name=payload["name"],
+                        description=payload["description"],
+                        cuisine=payload["cuisine"],
+                        ingredients=payload["ingredients"],
+                        instructions=payload["instructions"],
+                        preparation_time=payload["preparation_time"],
+                    )
+                    recipe_id = self.db.insert_recipe(recipe_obj)
+                    self.status_lbl.config(text=f"(Local) Added recipe #{recipe_id}: {name}")
+            except Exception as db_exc:
+                self.status_lbl.config(text=f"Request failed and local DB failed: {db_exc}")
+                return
 
         self._clear_form()
         self._load_recipes()
@@ -278,9 +330,21 @@ class CulinaryGUI:
         recipe_id = self.tree.item(selected[0])['values'][0]
         try:
             recipe = api_get_recipe(recipe_id, self.api_base)
-        except RequestException as exc:
-            self.status_lbl.config(text=f"Failed to load recipe: {exc}")
-            return
+        except RequestException:
+            # Fallback: load from local DB
+            local = self.db.get_recipe(recipe_id)
+            if not local:
+                self.status_lbl.config(text="Failed to load recipe from API and local DB")
+                return
+            recipe = {
+                "id": local.id,
+                "name": local.name,
+                "cuisine": local.cuisine,
+                "preparation_time": local.preparation_time,
+                "description": local.description,
+                "ingredients": local.ingredients,
+                "instructions": local.instructions,
+            }
 
         self.current_recipe = recipe
         self.name_entry.delete(0, tk.END)
@@ -306,13 +370,23 @@ class CulinaryGUI:
         recipe_id = self.tree.item(selected[0])['values'][0]
         try:
             api_delete_recipe(recipe_id, self.api_base)
-        except RequestException as exc:
-            self.status_lbl.config(text=f"Failed to delete recipe: {exc}")
+            self._load_recipes()
+            self._clear_form()
+            self.status_lbl.config(text=f"Recipe #{recipe_id} deleted")
             return
-
-        self._load_recipes()
-        self._clear_form()
-        self.status_lbl.config(text=f"Recipe #{recipe_id} deleted")
+        except RequestException:
+            # Fallback to local DB delete
+            try:
+                deleted = self.db.delete_recipe(recipe_id)
+                if deleted:
+                    self._load_recipes()
+                    self._clear_form()
+                    self.status_lbl.config(text=f"(Local) Recipe #{recipe_id} deleted")
+                else:
+                    self.status_lbl.config(text="Failed to delete: recipe not found locally")
+            except Exception as db_exc:
+                self.status_lbl.config(text=f"Failed to delete recipe: {db_exc}")
+                return
 
     def _on_select(self, event):
         selected = self.tree.selection()
